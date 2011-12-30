@@ -1,12 +1,17 @@
 <?php
 
 /**
- *
- * OAuthController
- *
- * oauth auth consumer
- *
- */
+  *
+  * OAuthController
+  *
+  * oauth auth consumer
+  * This code is released as-is with no warranty of any kind.
+  * @see http://www.gnu.org/copyleft/gpl.html
+  * for licensing
+  *
+  *
+  */
+
 App::import('File', 'OAuthRequester', null, array('../Vendor/oauth-php/library/'), 'OAuthRequester.php');
 
 App::uses('BaseAuthenticate', 'Controller/Component/Auth');
