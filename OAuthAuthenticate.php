@@ -2,25 +2,24 @@
 
 /**
   *
-  * OAuthController
+  * OAuthAuthenticate
   *
-  * oauth auth consumer
-  * This code is released as-is with no warranty of any kind.
+  * auth with an oauth consumer
+  *
+  * This code is released under the GPL License, as-is with no warranty of any kind.
+  * Use at your own risk.
   * @see http://www.gnu.org/copyleft/gpl.html
-  * for licensing
   *
   *
   */
 
 App::import('File', 'OAuthRequester', null, array('../Vendor/oauth-php/library/'), 'OAuthRequester.php');
-
 App::uses('BaseAuthenticate', 'Controller/Component/Auth');
 
 class OAuthAuthenticate extends BaseAuthenticate {
 
     public $settings = array(
         'debug'=> 0,
-        'userModel' => 'User',
         'method' => 'POST',
         'usr_id' => 0,
         'key' => '',
@@ -31,12 +30,9 @@ class OAuthAuthenticate extends BaseAuthenticate {
         'path_auth' => '/oauth/authorize',
         'path_access' => '/oauth/access_token',
         'path_user_info' => '/oauthlogin/api/user/info',
-        'curl_options' => array(
-            // skip ssl strict checks eg. for self-signed certs
-            CURLOPT_SSL_VERIFYPEER => 0,
-            CURLOPT_SSL_VERIFYHOST => 0,
-        )
+        'curl_options' => array()
     );
+
     public $options = array(
         'consumer_key' => '',
         'consumer_secret' => '',
@@ -98,28 +94,19 @@ class OAuthAuthenticate extends BaseAuthenticate {
         );
 
         OAuthStore::instance($this->settings['store_type'], $this->options);
-
-        
         $appController = $this->getController();
 
-//      clear all session data
-//
-/*
-        $appController->Session->delete("requestTokens");
-        $appController->Session->delete("oauthToken");
-        $appController->Session->delete("oauthUser");
-//*/
-        if ($appController->Session->check("oauthAccess")) {
+        if ($appController->Session->check("oauthUser")) {
             $user = $this->getUser();
             if($user) {
                 return $this->getUser();
             }
             else{
                 // clear out
-                $this->logout(null);
+                $this->clear();
             }
         }
-        
+
         $requestTokens = null;
         if ($appController->Session->check("requestTokens")) {
             $requestTokens = $appController->Session->read("requestTokens");
@@ -129,9 +116,8 @@ class OAuthAuthenticate extends BaseAuthenticate {
             if (isset($_GET['oauth_token'])) {
                 $oauth_token = $_GET['oauth_token'];
             } else {
-
-                $appController->Session->delete("oauthAccess");
-                $appController->Session->delete("requestTokens");
+        
+                $this->clear();
                 $this->log( __("Missing oauth_token.") );
                 return false;
             }
@@ -152,16 +138,15 @@ class OAuthAuthenticate extends BaseAuthenticate {
                 return $this->getUser();
             } catch (Exception $e) {
                 //krumo($e->getMessage());
-                $appController->Session->delete("oauthAccess");
-                $appController->Session->delete("requestTokens");
+                $this->clear();
                 $this->log( $e );
             }
 
         } else {
 
-            $appController->Session->delete("requestTokens");
-            $appController->Session->delete("oauthAccess");
-
+            // start clean
+            $this->clear();
+            
             $params = null;
             $response = false;
             try {
@@ -195,12 +180,15 @@ class OAuthAuthenticate extends BaseAuthenticate {
     }
 
     public function logout($user) {
+        $this->clear();
+    }
 
+    public function clear(){
         $appController = $this->getController();
-
+        
         $appController->Session->delete("oauthUser");
         $appController->Session->delete("oauthAccess");
-        $appController->Session->delete("requestToken");
+        $appController->Session->delete("requestTokens");
     }
 
     public function getUser() {
@@ -224,7 +212,7 @@ class OAuthAuthenticate extends BaseAuthenticate {
             if(isset($this->settings['curl_options']) && is_array($this->settings['curl_options'])){
                 $curl_options += $this->settings['curl_options'];
             }
-            
+
             $request = new OAuthRequester($base_url . $this->settings['path_user_info'], 'POST', $options);
             $result = $request->doRequest(0, $curl_options);
             
@@ -245,28 +233,33 @@ class OAuthAuthenticate extends BaseAuthenticate {
             $this->log( $e );
         }
 
-        $this->logout( null );
+        $this->clear();
         return false;
     }
 
     private function log( $e ){
 
+        $msg = $e;
+        if( method_exists($e, 'getMessage'))
+        {
+            $msg = $e->getMessage();
+        }
+
+
         if(isset($this->settings['debug']) && $this->settings['debug'])
         {
-            debug(  $e->getMessage() . "\n\n[".
-                    $e->getTraceAsString(). "]\n".
-                    ' at line '.$e->getLine()
+            if( method_exists($e, 'getMessage')) {
+                debug(  $e->getMessage() . "\n\n[".
+                        $e->getTraceAsString(). "]\n".
+                        ' at line '.$e->getLine()
                  );
-        }
-        else
-        {
-            $ctrl = $this->getController();
-            
-            $msg = $e;
-            if( method_exists($e, 'getMessage'))
-            {
-                $msg = $e->getMessage();
             }
+            else {
+                debug( $msg );
+            }
+        }
+        else {
+            $ctrl = $this->getController();           
             $ctrl->Session->setFlash(__("An error happened while trying to authenticate: ") . $msg);
         }
     }
